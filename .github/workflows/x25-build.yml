@@ -47,10 +47,36 @@ jobs:
           chmod +x ./gradlew
           ./gradlew --no-daemon compileDebugKotlin compileDebugAndroidTestKotlin testDebugUnitTest --stacktrace
 
-      - name: Build debug + release APKs
+      - name: Build release APK
         run: |
+          set -o pipefail
           export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
-          ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace
+          ./gradlew --no-daemon assembleRelease --stacktrace 2>&1 | tee build-release.log
+
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          ./gradlew --no-daemon assembleDebug --stacktrace 2>&1 | tee build-debug.log
+
+      # job logs live in blob storage that is not always reachable; keep a copy in git on failure
+      - name: Publish build log on failure
+        if: failure()
+        run: |
+          git config user.name "x25-ci"
+          git config user.email "x25-ci@users.noreply.github.com"
+          mkdir -p /tmp/logs
+          for f in build-release.log build-debug.log; do [ -f "$f" ] && cp "$f" /tmp/logs/; done
+          find app/.cxx -name "*.log" -newer build.gradle.kts 2>/dev/null | head -50 | while read f; do cp "$f" "/tmp/logs/$(echo "$f" | tr '/' '_')"; done
+          df -h > /tmp/logs/df.txt; free -m > /tmp/logs/free.txt
+          git checkout --orphan ci-logs-${{ github.run_number }}
+          git rm -rf --cached . > /dev/null
+          rm -rf ./* .github .gitmodules || true
+          cp /tmp/logs/* .
+          for f in *.log; do tail -c 900000 "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done
+          git add -A
+          git commit -m "CI logs for run ${{ github.run_number }}"
+          git push origin HEAD:refs/heads/ci-logs-${{ github.run_number }}
 
       - name: Collect APKs
         id: collect
