@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: x25-build
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -45,7 +45,7 @@ jobs:
       - name: Kotlin compile + unit tests (fast fail)
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon compileDebugKotlin testDebugUnitTest --stacktrace
+          ./gradlew --no-daemon compileDebugKotlin compileDebugAndroidTestKotlin testDebugUnitTest --stacktrace
 
       - name: Build debug + release APKs
         run: |

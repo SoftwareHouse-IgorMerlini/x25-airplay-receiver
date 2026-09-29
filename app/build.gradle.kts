@@ -35,8 +35,9 @@ android {
         applicationId = "com.x25.airplay"
         minSdk = 24
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.0.31-x25.1"
+        versionCode = 32
+        versionName = "0.0.31-x25.2"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {
             cmake {
@@ -148,4 +149,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

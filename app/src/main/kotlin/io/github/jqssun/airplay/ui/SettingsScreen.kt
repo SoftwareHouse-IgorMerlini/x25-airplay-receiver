@@ -28,6 +28,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.jqssun.airplay.Prefs
 import io.github.jqssun.airplay.R
+import io.github.jqssun.airplay.renderer.LatencyMode
 import io.github.jqssun.airplay.viewmodel.MainViewModel
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -63,12 +64,15 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val realtimeDecoderPriority by viewModel.realtimeDecoderPriority.collectAsState()
     val lowLatency by viewModel.lowLatency.collectAsState()
     val operatingRate by viewModel.operatingRate.collectAsState()
-    val scheduledOutputBufferRelease by viewModel.scheduledOutputBufferRelease.collectAsState()
     val benchmarkLog by viewModel.benchmarkLog.collectAsState()
     val audioAutoBuffer by viewModel.audioAutoBuffer.collectAsState()
     val audioCushionMs by viewModel.audioCushionMs.collectAsState()
     val audioAdaptiveStep by viewModel.audioAdaptiveStep.collectAsState()
     val oboeBufferFrames by viewModel.oboeBufferFrames.collectAsState()
+    val decoderMode by viewModel.decoderMode.collectAsState()
+    val latencyMode by viewModel.latencyMode.collectAsState()
+    val scaleMode by viewModel.scaleMode.collectAsState()
+    val overscanPct by viewModel.overscanPct.collectAsState()
 
     Column(
         modifier = Modifier
@@ -105,13 +109,86 @@ fun SettingsScreen(viewModel: MainViewModel) {
             onCheckedChange = { viewModel.setRunInBackground(it) }
         )
 
-        SectionHeader(stringResource(R.string.section_connection))
+        SectionHeader(stringResource(R.string.section_x25))
+
+        SettingChips(
+            title = stringResource(R.string.setting_latency_mode),
+            description = stringResource(R.string.setting_latency_mode_desc),
+            value = latencyMode.key,
+            options = listOf(
+                LatencyMode.LOW.key to stringResource(R.string.chip_latency_low),
+                LatencyMode.BALANCED.key to stringResource(R.string.chip_latency_balanced),
+                LatencyMode.STABLE.key to stringResource(R.string.chip_latency_stable),
+            ),
+            onValueChange = { viewModel.setLatencyMode(LatencyMode.fromKey(it)) }
+        )
+
+        SettingChips(
+            title = stringResource(R.string.setting_decoder_mode),
+            description = stringResource(R.string.setting_decoder_mode_desc),
+            value = decoderMode,
+            options = listOf(
+                Prefs.AUTO to stringResource(R.string.chip_auto),
+                Prefs.HARDWARE to stringResource(R.string.chip_hardware),
+                Prefs.SOFTWARE to stringResource(R.string.chip_software),
+            ),
+            onValueChange = { viewModel.setDecoderMode(it) }
+        )
+
+        SettingChips(
+            title = stringResource(R.string.setting_scale_mode),
+            description = stringResource(R.string.setting_scale_mode_desc),
+            value = scaleMode,
+            options = listOf(
+                "fit" to stringResource(R.string.chip_fit),
+                "fill" to stringResource(R.string.chip_fill),
+                "stretch" to stringResource(R.string.chip_stretch),
+            ),
+            onValueChange = { viewModel.setScaleMode(it) }
+        )
+
+        run {
+            var overscanVal by remember(overscanPct) { mutableFloatStateOf(overscanPct.toFloat()) }
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.setting_overscan_pct)) },
+                supportingContent = {
+                    Column {
+                        Text(stringResource(R.string.setting_overscan_pct_desc))
+                        Slider(
+                            value = overscanVal,
+                            onValueChange = { overscanVal = it },
+                            onValueChangeFinished = { viewModel.setOverscanPct(overscanVal.roundToInt()) },
+                            valueRange = 0f..10f,
+                            steps = 9,
+                            modifier = Modifier.dpadFocus().dpadAdjust(
+                                onLeft = { viewModel.setOverscanPct(overscanPct - 1) },
+                                onRight = { viewModel.setOverscanPct(overscanPct + 1) }
+                            )
+                        )
+                    }
+                },
+                trailingContent = { Text("${overscanVal.roundToInt()}%") }
+            )
+        }
 
         SettingSwitch(
+            title = stringResource(R.string.setting_debug_overlay),
+            description = stringResource(R.string.setting_debug_overlay_desc),
+            checked = debugEnabled,
+            onCheckedChange = { viewModel.setDebugEnabled(it) }
+        )
+
+        SectionHeader(stringResource(R.string.section_connection))
+
+        SettingChips(
             title = stringResource(R.string.setting_require_pin),
             description = stringResource(R.string.setting_require_pin_desc),
-            checked = requirePin,
-            onCheckedChange = { viewModel.setRequirePin(it) }
+            value = if (requirePin) "4" else Prefs.OFF,
+            options = listOf(
+                Prefs.OFF to stringResource(R.string.chip_off),
+                "4" to stringResource(R.string.chip_pin_4),
+            ),
+            onValueChange = { viewModel.setRequirePin(it == "4") }
         )
 
         SettingSwitch(
@@ -173,7 +250,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
             title = stringResource(R.string.setting_max_fps),
             description = stringResource(R.string.setting_max_fps_desc),
             value = maxFps.toString(),
-            presets = listOf("24" to "24", "30" to "30", "60" to "60", "120" to "120"),
+            presets = listOf("0" to stringResource(R.string.chip_auto), "24" to "24", "30" to "30", "60" to "60", "120" to "120"),
             placeholder = stringResource(R.string.setting_max_fps_placeholder),
             keyboardType = KeyboardType.Number,
             onValueChange = { it.toIntOrNull()?.let { v -> viewModel.setMaxFps(v) } }
@@ -301,12 +378,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 onCheckedChange = { viewModel.setLowLatency(it) }
             )
 
-            SettingSwitch(
-                title = stringResource(R.string.setting_scheduled_output_buffer_release),
-                description = stringResource(R.string.setting_scheduled_output_buffer_release_desc),
-                checked = scheduledOutputBufferRelease,
-                onCheckedChange = { viewModel.setScheduledOutputBufferRelease(it) }
-            )
+            // frame pacing is now part of the X25 latency mode (BALANCED/STABLE pace, LOW does not)
 
             SettingSwitch(
                 title = stringResource(R.string.setting_audio_delay),
@@ -386,13 +458,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
 
             SettingSwitch(
-                title = stringResource(R.string.setting_debug_overlay),
-                description = stringResource(R.string.setting_debug_overlay_desc),
-                checked = debugEnabled,
-                onCheckedChange = { viewModel.setDebugEnabled(it) }
-            )
-
-            SettingSwitch(
                 title = stringResource(R.string.setting_benchmark_log),
                 description = stringResource(R.string.setting_benchmark_log_desc),
                 checked = benchmarkLog,
@@ -427,9 +492,9 @@ private fun SettingResolution(
 ) {
     val presets = listOf(
         Prefs.AUTO to stringResource(R.string.chip_auto),
-        "1280x720" to "1280x720",
-        "1920x1080" to "1920x1080",
-        "3840x2160" to "3840x2160"
+        "1280x720" to "720p",
+        "1920x1080" to "1080p",
+        "3840x2160" to "4K"
     )
     val devicePresets = listOf(
         "portrait" to stringResource(R.string.chip_device_portrait),

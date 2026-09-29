@@ -32,12 +32,22 @@ object Prefs {
     const val FORCE_SW_ALAC = "force_sw_alac"; const val DEF_FORCE_SW_ALAC = true
     const val AAC_ENABLED = "aac_enabled"; const val DEF_AAC_ENABLED = true
     const val RESOLUTION = "resolution"; const val DEF_RESOLUTION = AUTO
-    const val MAX_FPS = "max_fps"; const val DEF_MAX_FPS = 60
+    // 0 = auto (display refresh rate, capped by decoder capability and 60)
+    const val MAX_FPS = "max_fps"; const val DEF_MAX_FPS = 0
     const val OVERSCANNED = "overscanned"; const val DEF_OVERSCANNED = false
     const val REQUIRE_PIN = "require_pin"; const val DEF_REQUIRE_PIN = false
     const val ALLOW_NEW_CONN = "allow_new_conn"; const val DEF_ALLOW_NEW_CONN = true
     const val AUDIO_LATENCY_MS = "audio_latency_ms"; const val DEF_AUDIO_LATENCY_MS = -1
     const val DEBUG_ENABLED = "debug_enabled"; const val DEF_DEBUG_ENABLED = false
+    // X25: decoder preference (auto = hw vendor > hw android > sw fallback)
+    const val DECODER_MODE = "decoder_mode"; const val DEF_DECODER_MODE = AUTO
+    const val HARDWARE = "hardware"; const val SOFTWARE = "software"
+    // X25: latency profile, see renderer/LatencyMode
+    const val LATENCY_MODE = "latency_mode"; const val DEF_LATENCY_MODE = "balanced"
+    // X25: mirroring scale mode (fit / fill / stretch)
+    const val SCALE_MODE = "scale_mode"; const val DEF_SCALE_MODE = "fit"
+    // X25: projector overscan compensation, percent of the screen trimmed on each axis (0..10)
+    const val OVERSCAN_PCT = "overscan_pct"; const val DEF_OVERSCAN_PCT = 0
     const val DEVELOPER_OPTIONS = "developer_options"; const val DEF_DEVELOPER_OPTIONS = false
     const val BENCHMARK_LOG = "benchmark_log"; const val DEF_BENCHMARK_LOG = false
     const val IDLE_PREVIEW = "idle_preview"; const val DEF_IDLE_PREVIEW = false

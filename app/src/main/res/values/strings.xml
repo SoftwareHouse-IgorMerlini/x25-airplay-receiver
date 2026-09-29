@@ -12,6 +12,7 @@
 
     <!-- Tabs -->
     <string name="tab_overview">Overview</string>
+    <string name="tab_diagnostics">Diagnostics</string>
     <string name="tab_logs">Logs</string>
     <string name="tab_settings">Settings</string>
 
@@ -74,6 +75,7 @@
 
     <!-- Settings sections -->
     <string name="section_server">Server</string>
+    <string name="section_x25">X25 video</string>
     <string name="section_connection">Connection</string>
     <string name="section_display">Display</string>
     <string name="section_decode">Decode</string>
@@ -90,8 +92,25 @@
     <string name="setting_run_in_background_desc">Keep the server running after leaving the app</string>
 
     <!-- Settings: Connection -->
-    <string name="setting_require_pin">Require PIN (Beta)</string>
-    <string name="setting_require_pin_desc">Require 4-digit PIN for each new connection</string>
+    <string name="setting_require_pin">PIN</string>
+    <string name="setting_require_pin_desc">Ask for a code shown on the projector for each new connection. AirPlay pairing on iPhone/iPad/Mac only accepts 4-digit codes, so 6-digit PINs are not offered.</string>
+    <string name="chip_pin_4">4 digits</string>
+    <string name="setting_latency_mode">Latency</string>
+    <string name="setting_latency_mode_desc">LOW: direct MediaCodec to SurfaceView, frames shown as soon as decoded, smallest audio buffer. BALANCED: direct rendering with VSYNC-aligned pacing. STABLE: GPU pipeline and larger audio buffer, most tolerant to Wi-Fi jitter.</string>
+    <string name="chip_latency_low">Low</string>
+    <string name="chip_latency_balanced">Balanced</string>
+    <string name="chip_latency_stable">Stable</string>
+    <string name="setting_decoder_mode">Decoder</string>
+    <string name="setting_decoder_mode_desc">AUTO: hardware vendor decoder, then hardware Android decoder, software only as fallback. HARDWARE: never fall back to software. SOFTWARE: CPU decoding (H.264 only).</string>
+    <string name="chip_hardware">Hardware</string>
+    <string name="chip_software">Software</string>
+    <string name="setting_scale_mode">Screen</string>
+    <string name="setting_scale_mode_desc">FIT keeps the video proportion (black bars), FILL crops to fill the screen, STRETCH distorts to fill</string>
+    <string name="chip_fit">Fit</string>
+    <string name="chip_fill">Fill</string>
+    <string name="chip_stretch">Stretch</string>
+    <string name="setting_overscan_pct">Overscan</string>
+    <string name="setting_overscan_pct_desc">Shrink the mirrored picture so edges cut off by the projector become visible</string>
     <string name="setting_allow_new_conn">Allow new connections</string>
     <string name="setting_allow_new_conn_desc">Drop current client when a new one connects</string>
 
@@ -121,7 +140,7 @@
     <string name="setting_max_fps">Maximum FPS</string>
     <string name="setting_max_fps_desc">Maximum frame rate advertised to clients</string>
     <string name="setting_max_fps_placeholder">FPS</string>
-    <string name="setting_overscanned">Overscanned</string>
+    <string name="setting_overscanned">Overscanned (sender side)</string>
     <string name="setting_overscanned_desc">Add pixel boundary for full-screen overscan displays</string>
     <string name="chip_custom">Custom</string>
     <string name="chip_device_portrait">Portrait</string>

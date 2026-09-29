@@ -12,6 +12,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import io.github.jqssun.airplay.Prefs
 import io.github.jqssun.airplay.audio.TrackInfo
+import io.github.jqssun.airplay.renderer.CodecEntry
+import io.github.jqssun.airplay.renderer.CodecInspector
+import io.github.jqssun.airplay.renderer.LatencyMode
+import io.github.jqssun.airplay.renderer.ProbeResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import io.github.jqssun.airplay.service.AirPlayService
 import io.github.jqssun.airplay.service.AirPlayService.ServerState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,11 +56,18 @@ data class DebugInfo(
     val videoFrames: Long = 0,
     val droppedFrames: Long = 0,
     val framePacingJitterUs: Long = 0,
+    val renderFps: Float = 0f,
+    val decoderBufferMs: Int = 0,
+    val latencyMs: Float = 0f,
+    val activeCodec: CodecEntry? = null,
+    val directRender: Boolean = false,
+    val mirroring: Boolean = false,
     val audioCodec: String = "",
     val audioVolume: Int = 100,
     val audio: AudioDebug? = null,
     val connections: Int = 0,
 ) {
+    val kbpsStr: String get() = "${videoBitrate / 1000} kbps"
     val bitrateStr: String get() {
         val kbps = videoBitrate / 1000
         return if (kbps >= 1000) "${"%.1f".format(kbps / 1000.0)} Mbps" else "$kbps Kbps"
@@ -188,6 +201,52 @@ class MainViewModel @Inject constructor(app: Application) : AndroidViewModel(app
 
     private val _launchOnConnect = MutableStateFlow(prefs.getBoolean(Prefs.LAUNCH_ON_CONNECT, Prefs.DEF_LAUNCH_ON_CONNECT))
     val launchOnConnect: StateFlow<Boolean> = _launchOnConnect.asStateFlow()
+
+    // X25 settings
+    private val _decoderMode = MutableStateFlow(prefs.getString(Prefs.DECODER_MODE, Prefs.DEF_DECODER_MODE)!!)
+    val decoderMode: StateFlow<String> = _decoderMode.asStateFlow()
+
+    private val _latencyMode = MutableStateFlow(LatencyMode.fromKey(prefs.getString(Prefs.LATENCY_MODE, Prefs.DEF_LATENCY_MODE)))
+    val latencyMode: StateFlow<LatencyMode> = _latencyMode.asStateFlow()
+
+    private val _scaleMode = MutableStateFlow(prefs.getString(Prefs.SCALE_MODE, Prefs.DEF_SCALE_MODE)!!)
+    val scaleMode: StateFlow<String> = _scaleMode.asStateFlow()
+
+    private val _overscanPct = MutableStateFlow(prefs.getInt(Prefs.OVERSCAN_PCT, Prefs.DEF_OVERSCAN_PCT))
+    val overscanPct: StateFlow<Int> = _overscanPct.asStateFlow()
+
+    // X25 hardware decoder diagnostics
+    private val _codecList = MutableStateFlow<List<CodecEntry>>(emptyList())
+    val codecList: StateFlow<List<CodecEntry>> = _codecList.asStateFlow()
+
+    private val _probeResults = MutableStateFlow<List<ProbeResult>>(emptyList())
+    val probeResults: StateFlow<List<ProbeResult>> = _probeResults.asStateFlow()
+
+    private val _probing = MutableStateFlow(false)
+    val probing: StateFlow<Boolean> = _probing.asStateFlow()
+
+    fun refreshCodecList() {
+        viewModelScope.launch {
+            _codecList.value = withContext(Dispatchers.Default) { CodecInspector.allDecoders() }
+        }
+    }
+
+    // instantiates every H.264/HEVC decoder once (configure 1080p, start, release) and logs the result
+    fun runDecoderProbe() {
+        if (_probing.value) return
+        _probing.value = true
+        viewModelScope.launch {
+            val results = withContext(Dispatchers.Default) {
+                CodecInspector.allDecoders().map { CodecInspector.probe(it) }
+            }
+            _probeResults.value = results
+            results.forEach { r ->
+                addLog("[decoder-test] ${r.entry.codecLabel} ${r.entry.name} class=${r.entry.codecClass} " +
+                    "${r.width}x${r.height} -> ${if (r.ok) "OK" else "FAIL ${r.error}"} (${r.millis} ms)")
+            }
+            _probing.value = false
+        }
+    }
 
     // debug
     private val _debugEnabled = MutableStateFlow(prefs.getBoolean(Prefs.DEBUG_ENABLED, Prefs.DEF_DEBUG_ENABLED))
@@ -406,6 +465,22 @@ class MainViewModel @Inject constructor(app: Application) : AndroidViewModel(app
     fun setAdvertiseVideo(v: Boolean) { _advertiseVideo.value = v; prefs.edit().putBoolean(Prefs.ADVERTISE_VIDEO, v).apply(); _applyByServerRestart() }
     fun setAdvertiseAudio(v: Boolean) { _advertiseAudio.value = v; prefs.edit().putBoolean(Prefs.ADVERTISE_AUDIO, v).apply(); _applyByServerRestart() }
     fun setLaunchOnConnect(v: Boolean) { _launchOnConnect.value = v; prefs.edit().putBoolean(Prefs.LAUNCH_ON_CONNECT, v).apply() }
+    fun setDecoderMode(v: String) { _decoderMode.value = v; prefs.edit().putString(Prefs.DECODER_MODE, v).apply(); _applyByServerRestart() }
+    fun setScaleMode(v: String) { _scaleMode.value = v; prefs.edit().putString(Prefs.SCALE_MODE, v).apply() }
+    fun setOverscanPct(v: Int) {
+        val value = v.coerceIn(0, 10)
+        _overscanPct.value = value
+        prefs.edit().putInt(Prefs.OVERSCAN_PCT, value).apply()
+    }
+    // latency profile also drives the audio cushion so audio and video stay in the same regime
+    fun setLatencyMode(mode: LatencyMode) {
+        _latencyMode.value = mode
+        prefs.edit().putString(Prefs.LATENCY_MODE, mode.key).apply()
+        setAudioAutoBuffer(true)
+        setAudioAdaptiveStep(mode.audioAdaptiveStep)
+        setLowLatency(mode.audioLowLatency)
+        _applyByServerRestart()
+    }
     fun setDebugEnabled(v: Boolean) { _debugEnabled.value = v; prefs.edit().putBoolean(Prefs.DEBUG_ENABLED, v).apply() }
     fun setDeveloperOptions(v: Boolean) {
         _developerOptions.value = v
@@ -595,9 +670,8 @@ class MainViewModel @Inject constructor(app: Application) : AndroidViewModel(app
             }
             _mirroringActive.value = it.mirroringActive.value
             _trackInfo.value = it.trackInfo.value
-            if (_debugEnabled.value) {
-                _debugInfo.value = it.collectDebugInfo()
-            }
+            // X25: status panel shows decoder/stream info even with the debug overlay off
+            _debugInfo.value = it.collectDebugInfo()
         }
     }
 

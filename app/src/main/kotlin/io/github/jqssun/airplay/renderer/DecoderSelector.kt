@@ -73,11 +73,7 @@ class DecoderSelector(private val ctx: Context) {
     fun software(mime: String, w: Int, h: Int): MediaCodecInfo? =
         MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.firstOrNull { info ->
             !info.isEncoder && info.supportsMime(mime) &&
-                (if (Build.VERSION.SDK_INT >= 29) info.isSoftwareOnly
-                else info.name.lowercase().let {
-                    it.startsWith("omx.google.") || it.startsWith("c2.android.") ||
-                        (!it.startsWith("omx.") && !it.startsWith("c2."))
-                })
+                !classOf(info).isHardware
         }?.takeIf { _portraitSafe(w, h, it.videoCaps(mime)::isSizeSupported) }
 
     fun adaptive(info: MediaCodecInfo, mime: String) = !_inList(noAdaptive, info.name) &&
@@ -116,11 +112,18 @@ class DecoderSelector(private val ctx: Context) {
         return set
     }
 
+    // X25: hardware vendor codecs first, then hardware android codecs (MediaCodecList order kept within a class)
     private fun _decoders(mime: String) =
-        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { info ->
-            !info.isEncoder && (Build.VERSION.SDK_INT < 29 || !info.isAlias) &&
-                info.supportsMime(mime) && !_blacklisted(info)
-        }
+        CodecRanking.sort(
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { info ->
+                !info.isEncoder && (Build.VERSION.SDK_INT < 29 || !info.isAlias) &&
+                    info.supportsMime(mime) && !_blacklisted(info)
+            }
+        ) { classOf(it) }
+
+    fun classOf(info: MediaCodecInfo): CodecClass =
+        if (Build.VERSION.SDK_INT >= 29) CodecRanking.classify(info.name, info.isHardwareAccelerated, info.isSoftwareOnly, info.isVendor)
+        else CodecRanking.classify(info.name, null, null, null)
 
     private fun _blacklisted(info: MediaCodecInfo) =
         (!emulator && Build.VERSION.SDK_INT >= 29 && info.isSoftwareOnly) || _inList(blacklist, info.name)

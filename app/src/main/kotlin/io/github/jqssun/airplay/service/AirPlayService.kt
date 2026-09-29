@@ -47,6 +47,7 @@ import io.github.jqssun.airplay.discovery.NsdServiceManager
 import io.github.jqssun.airplay.download.VideoDownloader
 import io.github.jqssun.airplay.renderer.AirPlayVideoPlayer
 import io.github.jqssun.airplay.renderer.AudioRenderer
+import io.github.jqssun.airplay.renderer.LatencyMode
 import io.github.jqssun.airplay.renderer.VideoRenderer
 import io.github.jqssun.airplay.viewmodel.DebugInfo
 import java.net.NetworkInterface
@@ -374,10 +375,13 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         audioRenderer.attachEngine(nativeHandle)
 
         // apply settings from preferences
-        val maxFps = prefs.getInt(Prefs.MAX_FPS, Prefs.DEF_MAX_FPS)
         val overscanned = prefs.getBoolean(Prefs.OVERSCANNED, Prefs.DEF_OVERSCANNED)
         val audioLatencyMs = prefs.getInt(Prefs.AUDIO_LATENCY_MS, Prefs.DEF_AUDIO_LATENCY_MS)
         val (reqW, reqH) = _displaySize(clamp = false)
+        videoRenderer.decoderMode = prefs.getString(Prefs.DECODER_MODE, Prefs.DEF_DECODER_MODE) ?: Prefs.DEF_DECODER_MODE
+        // decoder choice first (AUTO fps needs its capabilities), then resolve fps and re-check hevc at that rate
+        videoRenderer.selectDecoders(reqW, reqH, 60, false)
+        val maxFps = _effectiveFps(reqW, reqH)
         val h265 = videoRenderer.selectDecoders(reqW, reqH, maxFps, prefs.getBoolean(Prefs.H265_ENABLED, Prefs.DEF_H265_ENABLED))
         val alac = prefs.getBoolean(Prefs.ALAC_ENABLED, Prefs.DEF_ALAC_ENABLED)
         val aac = prefs.getBoolean(Prefs.AAC_ENABLED, Prefs.DEF_AAC_ENABLED)
@@ -389,7 +393,11 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         }
         videoRenderer.benchmarkLog = prefs.getBoolean(Prefs.BENCHMARK_LOG, Prefs.DEF_BENCHMARK_LOG)
         videoRenderer.benchmarkLogCallback = { msg -> logCallback?.invoke(msg) }
-        videoRenderer.scheduledOutputBufferRelease = prefs.getBoolean(Prefs.SCHEDULED_OUTPUT_BUFFER_RELEASE, Prefs.DEF_SCHEDULED_OUTPUT_BUFFER_RELEASE)
+        val latencyMode = LatencyMode.fromKey(prefs.getString(Prefs.LATENCY_MODE, Prefs.DEF_LATENCY_MODE))
+        videoRenderer.scheduledOutputBufferRelease = latencyMode.scheduledRelease
+        videoRenderer.directRender = latencyMode.directRender
+        log("Latency ${latencyMode.name}: direct=${latencyMode.directRender} scheduled=${latencyMode.scheduledRelease}, " +
+            "decoder mode ${videoRenderer.decoderMode}, ${maxFps}fps, avc=${videoRenderer.selectedAvc?.name} hevc=${videoRenderer.selectedHevc?.name}")
         NativeBridge.nativeSetH265Enabled(nativeHandle, h265)
         NativeBridge.nativeSetCodecs(nativeHandle, alac, aac)
         val advertiseVideo = prefs.getBoolean(Prefs.ADVERTISE_VIDEO, Prefs.DEF_ADVERTISE_VIDEO)
@@ -438,6 +446,18 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         log("Server started on port $port")
     }
 
+    // X25: 0 = AUTO -> display refresh rate, capped by what the selected decoder declares and by 60
+    private fun _effectiveFps(w: Int, h: Int): Int {
+        val pref = prefs.getInt(Prefs.MAX_FPS, Prefs.DEF_MAX_FPS)
+        if (pref > 0) return pref
+        val refresh = runCatching {
+            getSystemService(android.hardware.display.DisplayManager::class.java)
+                ?.getDisplay(android.view.Display.DEFAULT_DISPLAY)?.refreshRate?.roundToInt()
+        }.getOrNull()?.takeIf { it > 0 } ?: 60
+        val decoderMax = videoRenderer.maxFpsFor(w, h) ?: 60
+        return minOf(refresh, decoderMax, 60).coerceAtLeast(24)
+    }
+
     private fun _orientationFollowsDevice(): Boolean =
         prefs.getString(Prefs.RESOLUTION, Prefs.DEF_RESOLUTION) == Prefs.AUTO
 
@@ -467,7 +487,7 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         if (nativeHandle == 0L || _serverState.value != ServerState.RUNNING) return
         if (!_orientationFollowsDevice()) return
         val (w, h) = _displaySize()
-        NativeBridge.nativeSetDisplaySize(nativeHandle, w, h, prefs.getInt(Prefs.MAX_FPS, Prefs.DEF_MAX_FPS))
+        NativeBridge.nativeSetDisplaySize(nativeHandle, w, h, _effectiveFps(w, h))
         log("Advertising ${w}x${h} from next session")
     }
 
@@ -938,6 +958,12 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         videoFrames = videoRenderer.frameCount,
         droppedFrames = videoRenderer.droppedFrames,
         framePacingJitterUs = videoRenderer.framePacingJitterUs,
+        renderFps = videoRenderer.renderFps,
+        decoderBufferMs = videoRenderer.decoderBufferMs,
+        latencyMs = videoRenderer.latencyMs,
+        activeCodec = videoRenderer.activeCodec,
+        directRender = videoRenderer.directRenderActive,
+        mirroring = _mirroringActive.value,
         audioCodec = audioRenderer.codecLabel,
         audioVolume = 100 * audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) /
             audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC),

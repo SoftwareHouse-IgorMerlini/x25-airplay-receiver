@@ -27,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -78,6 +79,7 @@ import kotlinx.coroutines.delay
 
 private enum class Tab(val labelRes: Int, val icon: ImageVector) {
     OVERVIEW(R.string.tab_overview, Icons.Default.Cast),
+    DIAGNOSTICS(R.string.tab_diagnostics, Icons.Default.Memory),
     LOGS(R.string.tab_logs, Icons.AutoMirrored.Filled.Article),
     SETTINGS(R.string.tab_settings, Icons.Default.Settings)
 }
@@ -103,11 +105,17 @@ fun MainScreen(
     // don't use movableContentOf: moving AndroidView across subcomposition boundaries makes it crash on reparent
     val video: @Composable () -> Unit = {
         val aspect by viewModel.videoAspect.collectAsState()
-        VideoSurfaceView(
-            onSurfaceAvailable = onSurfaceAvailable,
-            onSurfaceDestroyed = onSurfaceDestroyed,
-            aspectRatio = aspect
-        )
+        val scaleMode by viewModel.scaleMode.collectAsState()
+        val overscanPct by viewModel.overscanPct.collectAsState()
+        // X25: FIT / FILL / STRETCH + overscan are pure layout (compositor scaling), no pixel processing
+        MirrorVideoFrame(aspect = aspect, scaleMode = scaleMode, overscanPct = overscanPct) { sizeModifier ->
+            VideoSurfaceView(
+                onSurfaceAvailable = onSurfaceAvailable,
+                onSurfaceDestroyed = onSurfaceDestroyed,
+                applyAspectRatio = false,
+                modifier = sizeModifier
+            )
+        }
     }
 
     // fullscreen only once mirroring reports a size: connections rise before the kind is known
@@ -576,6 +584,7 @@ private fun TabContent(
             viewModel, video,
             onFullscreen = onFullscreen, onPip = onPip, showAudioMode = showAudioMode
         )
+        Tab.DIAGNOSTICS -> DiagnosticsScreen(viewModel)
         Tab.LOGS -> LogsScreen(viewModel)
         Tab.SETTINGS -> SettingsScreen(viewModel)
     }
@@ -745,6 +754,8 @@ private fun OverviewContent(
                         Text(if (state == ServerState.RUNNING) stringResource(R.string.btn_stop) else stringResource(R.string.btn_start))
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                X25StatusPanel(info = debugInfo, connected = state == ServerState.RUNNING && connections > 0)
             }
         }
     }
@@ -1014,6 +1025,7 @@ private fun DebugOverlay(info: DebugInfo, modifier: Modifier = Modifier) {
 private data class DebugSection(val title: String, val lines: List<String>)
 
 private fun debugOverlaySections(context: Context, info: DebugInfo): List<DebugSection> = buildList {
+    add(DebugSection("X25 AirPlay", x25StatusLines(info, connected = info.connections > 0)))
     buildList {
         if (info.videoCodec.isNotEmpty()) {
             add(context.getString(R.string.debug_video, info.videoCodec, info.videoRes))
@@ -1039,3 +1051,72 @@ private fun debugOverlaySections(context: Context, info: DebugInfo): List<DebugS
 private fun formatDecode(meanUs: Int, maxUs: Int, held: Int, errors: Int): String =
     (if (meanUs == 0) "held=$held"
     else "%.1f/%.1f ms held=%d".format(meanUs / 1000.0, maxUs / 1000.0, held)) + " errs=$errors"
+
+// X25: status values shared by the overview panel and the debug overlay; nothing is reported as
+// HARDWARE unless it comes from the MediaCodec instance that actually started
+private fun x25StatusLines(info: DebugInfo, connected: Boolean): List<String> {
+    val a = info.activeCodec
+    val decoder = when {
+        a == null -> "—"
+        a.codecClass.isHardware && a.codecClass.verified -> "HARDWARE"
+        a.codecClass.isHardware -> "HARDWARE (unverified, API<29)"
+        else -> "SOFTWARE"
+    }
+    val active = a != null
+    return listOf(
+        "Status: " + if (connected) "CONNECTED" else "DISCONNECTED",
+        "Decoder: $decoder",
+        "Codec: " + (a?.let { "${it.codecLabel} (${it.name})" } ?: "—"),
+        "Resolution: " + if (info.mirroring && info.videoRes.isNotEmpty()) info.videoRes else "—",
+        "FPS: " + if (active) "%.1f".format(info.renderFps) else "—",
+        "Bitrate: " + if (active) info.kbpsStr else "—",
+        "Dropped Frames: " + info.droppedFrames,
+        "Buffer: " + if (active) "${info.decoderBufferMs} ms" else "—",
+        "Latency: " + if (active) "${info.latencyMs.toInt()} ms" else "—",
+        "Render: " + if (!active) "—" else if (info.directRender) "direct SurfaceView" else "GL pipeline",
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun X25StatusPanel(info: DebugInfo, connected: Boolean) {
+    Text(
+        "[X25 AIRPLAY]",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+    Spacer(Modifier.height(4.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        x25StatusLines(info, connected).forEach { line ->
+            Text(
+                line,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.widthIn(min = 170.dp)
+            )
+        }
+    }
+}
+
+// X25: sizes the mirroring surface for FIT / FILL / STRETCH inside the overscan-reduced area
+@Composable
+private fun MirrorVideoFrame(
+    aspect: Float,
+    scaleMode: String,
+    overscanPct: Int,
+    content: @Composable (Modifier) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
+        val factor = 1f - overscanPct.coerceIn(0, 10) / 100f
+        val w = maxWidth * factor
+        val h = maxHeight * factor
+        val a = if (aspect > 0f) aspect else 16f / 9f
+        val sizeModifier = when (scaleMode) {
+            "stretch" -> Modifier.requiredSize(w, h)
+            "fill" -> if (w / h > a) Modifier.requiredSize(w, w / a) else Modifier.requiredSize(h * a, h)
+            else -> if (w / h > a) Modifier.requiredSize(h * a, h) else Modifier.requiredSize(w, w / a)
+        }
+        content(sizeModifier)
+    }
+}
