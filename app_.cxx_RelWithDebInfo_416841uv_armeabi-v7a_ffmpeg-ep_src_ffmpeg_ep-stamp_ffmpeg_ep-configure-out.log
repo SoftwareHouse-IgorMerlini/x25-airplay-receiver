@@ -1,0 +1,59 @@
+install prefix            /home/runner/work/x25-airplay-receiver/x25-airplay-receiver/app/.cxx/RelWithDebInfo/416841uv/armeabi-v7a/ffmpeg
+source path               /home/runner/work/x25-airplay-receiver/x25-airplay-receiver/app/src/main/cpp/third_party/ffmpeg
+C compiler                /usr/local/lib/android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
+C library                 bionic
+host C compiler           gcc
+host C library            glibc
+ARCH                      c (armv7-a)
+big-endian                no
+runtime cpu detection     yes
+debug symbols             no
+strip symbols             yes
+optimize for size         no
+optimizations             yes
+static                    yes
+shared                    no
+network support           no
+threading support         pthreads
+safe bitstream reader     yes
+texi2html enabled         no
+perl enabled              yes
+pod2man enabled           yes
+makeinfo enabled          yes
+makeinfo supports HTML    yes
+experimental features     yes
+xmllint enabled           no
+
+External libraries:
+
+External libraries providing hardware acceleration:
+
+Libraries:
+avcodec                 avutil
+
+Programs:
+
+Enabled decoders:
+alac
+
+Enabled encoders:
+
+Enabled hwaccels:
+
+Enabled parsers:
+
+Enabled demuxers:
+
+Enabled muxers:
+
+Enabled protocols:
+
+Enabled filters:
+
+Enabled bsfs:
+
+Enabled indevs:
+
+Enabled outdevs:
+
+License: LGPL version 2.1 or later
