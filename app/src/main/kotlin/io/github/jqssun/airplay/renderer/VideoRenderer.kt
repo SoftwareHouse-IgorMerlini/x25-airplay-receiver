@@ -56,6 +56,7 @@ class VideoRenderer(ctx: Context) {
     var benchmarkLogCallback: ((String) -> Unit)? = null
     // X25: Prefs.AUTO / Prefs.HARDWARE / Prefs.SOFTWARE
     var decoderMode: String = Prefs.DEF_DECODER_MODE
+    var forceHevc = false
 
     // X25: MediaCodec -> SurfaceView without the GL blit; applied from the next codec start
     var directRender: Boolean = false
@@ -148,7 +149,8 @@ class VideoRenderer(ctx: Context) {
             }
             else -> {
                 avcDecoder = selector.avc()
-                hevcDecoder = if (h265) selector.hevc(avcDecoder, w, h, fps) else null
+                hevcDecoder = if (!h265) null
+                    else selector.hevc(avcDecoder, w, h, fps) ?: if (forceHevc) selector.hevcHardware() else null
             }
         }
         maxFps = fps

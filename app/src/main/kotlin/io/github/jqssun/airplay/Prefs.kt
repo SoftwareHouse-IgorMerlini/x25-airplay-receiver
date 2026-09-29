@@ -14,6 +14,8 @@ object Prefs {
     const val BOOT_AUTO_START = "boot_auto_start"; const val DEF_BOOT_AUTO_START = true
     const val RUN_IN_BACKGROUND = "run_in_background"; const val DEF_RUN_IN_BACKGROUND = true
     const val H265_ENABLED = "h265_enabled"; const val DEF_H265_ENABLED = true
+    // X25: use any hardware HEVC decoder even if it is not on the known-good list
+    const val FORCE_H265 = "force_h265"; const val DEF_FORCE_H265 = false
     const val ENFORCE_SDR = "enforce_sdr"; const val DEF_ENFORCE_SDR = true
     val KEY_ALLOW_FRAME_DROP: String = MediaFormat.KEY_ALLOW_FRAME_DROP; const val DEF_KEY_ALLOW_FRAME_DROP = true
     val KEY_PRIORITY: String = MediaFormat.KEY_PRIORITY; const val DEF_KEY_PRIORITY = true

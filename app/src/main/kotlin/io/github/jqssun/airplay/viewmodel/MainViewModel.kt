@@ -137,6 +137,10 @@ class MainViewModel @Inject constructor(app: Application) : AndroidViewModel(app
     private val _h265Enabled = MutableStateFlow(prefs.getBoolean(Prefs.H265_ENABLED, Prefs.DEF_H265_ENABLED))
     val h265Enabled: StateFlow<Boolean> = _h265Enabled.asStateFlow()
 
+    private val _forceH265 = MutableStateFlow(prefs.getBoolean(Prefs.FORCE_H265, Prefs.DEF_FORCE_H265))
+    val forceH265: StateFlow<Boolean> = _forceH265.asStateFlow()
+    fun setForceH265(v: Boolean) { _forceH265.value = v; prefs.edit().putBoolean(Prefs.FORCE_H265, v).apply(); _applyByServerRestart() }
+
     private val _enforceSdr = MutableStateFlow(prefs.getBoolean(Prefs.ENFORCE_SDR, Prefs.DEF_ENFORCE_SDR))
     val enforceSdr: StateFlow<Boolean> = _enforceSdr.asStateFlow()
 

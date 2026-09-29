@@ -148,6 +148,8 @@
 
     <!-- Settings: Decode -->
     <string name="setting_h265">H.265 (HEVC)</string>
+    <string name="setting_force_h265">Force H.265 (experimental)</string>
+    <string name="setting_force_h265_desc">Use the hardware HEVC decoder even if this chip is not on the tested list. Better quality at the same Wi-Fi bitrate; turn off if the screen goes black.</string>
     <string name="setting_h265_desc">Enable H.265 video decoding if device supports it</string>
     <string name="setting_enforce_sdr">MediaFormat.KEY_COLOR_TRANSFER</string>
     <string name="setting_enforce_sdr_desc">Tag video as limited SDR; disable to allow HDR sources to pass through</string>

@@ -70,6 +70,9 @@ class DecoderSelector(private val ctx: Context) {
         return info.takeIf { !_canMeet(avcCaps, w, h, fps) && _canMeet(info.videoCaps(HEVC), w, h, fps) }
     }
 
+    // X25: first non-blacklisted hardware HEVC decoder, skipping the known-good whitelist
+    fun hevcHardware(): MediaCodecInfo? = _probableSafe(HEVC, -1)?.takeIf { classOf(it).isHardware }
+
     fun software(mime: String, w: Int, h: Int): MediaCodecInfo? =
         MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.firstOrNull { info ->
             !info.isEncoder && info.supportsMime(mime) &&

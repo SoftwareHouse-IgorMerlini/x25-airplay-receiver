@@ -379,6 +379,7 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         val audioLatencyMs = prefs.getInt(Prefs.AUDIO_LATENCY_MS, Prefs.DEF_AUDIO_LATENCY_MS)
         val (reqW, reqH) = _displaySize(clamp = false)
         videoRenderer.decoderMode = prefs.getString(Prefs.DECODER_MODE, Prefs.DEF_DECODER_MODE) ?: Prefs.DEF_DECODER_MODE
+        videoRenderer.forceHevc = prefs.getBoolean(Prefs.FORCE_H265, Prefs.DEF_FORCE_H265)
         // decoder choice first (AUTO fps needs its capabilities), then resolve fps and re-check hevc at that rate
         videoRenderer.selectDecoders(reqW, reqH, 60, false)
         val maxFps = _effectiveFps(reqW, reqH)
