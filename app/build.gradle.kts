@@ -31,11 +31,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.jqssun.airplay"
+        // X25: own id so it installs alongside the upstream app
+        applicationId = "com.x25.airplay"
         minSdk = 24
         targetSdk = 36
         versionCode = 31
-        versionName = "0.0.31"
+        versionName = "0.0.31-x25.1"
 
         externalNativeBuild {
             cmake {

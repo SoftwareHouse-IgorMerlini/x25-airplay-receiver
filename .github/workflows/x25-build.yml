@@ -1,0 +1,95 @@
+name: X25 build & publish APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: x25-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Use JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "21"
+          cache: "gradle"
+
+      - name: Signing config
+        env:
+          STORE: ${{ secrets.STORE }}
+          LOCAL: ${{ secrets.LOCAL }}
+        run: |
+          if [ -n "$STORE" ] && [ -n "$LOCAL" ]; then
+            echo "$STORE" | base64 -d > upload.jks
+            echo "$LOCAL" | base64 -d > local.properties
+            echo "release signing: configured"
+          else
+            cp signing/keystore.properties local.properties
+            echo "release signing: repository key (signing/x25-release.jks)"
+          fi
+
+      - name: Kotlin compile + unit tests (fast fail)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon compileDebugKotlin testDebugUnitTest --stacktrace
+
+      - name: Build debug + release APKs
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace
+
+      - name: Collect APKs
+        id: collect
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/app-debug.apk
+          REL=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$REL" dist/app-release.apk
+          cp dist/app-release.apk dist/X25-AirPlay.apk
+          ls -la dist
+          ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner verify --print-certs dist/app-release.apk || true
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "tag=v${VERSION}-b${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          rm -f upload.jks local.properties
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: x25-apks
+          path: |
+            dist/*.apk
+            app/build/reports/tests/**
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.collect.outputs.tag }}
+          name: X25 AirPlay Receiver ${{ steps.collect.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          body: |
+            X25 AirPlay Receiver - build ${{ github.run_number }} (${{ github.sha }})
+
+            Download direto (navegador / Downloader no projetor):
+            https://github.com/${{ github.repository }}/releases/latest/download/X25-AirPlay.apk
+
+            - X25-AirPlay.apk / app-release.apk: versao de uso (assinada)
+            - app-debug.apk: versao de depuracao
+          files: |
+            dist/X25-AirPlay.apk
+            dist/app-release.apk
+            dist/app-debug.apk
