@@ -393,6 +393,7 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         }
         videoRenderer.benchmarkLog = prefs.getBoolean(Prefs.BENCHMARK_LOG, Prefs.DEF_BENCHMARK_LOG)
         videoRenderer.benchmarkLogCallback = { msg -> logCallback?.invoke(msg) }
+        videoRenderer.eventLog = { msg -> log(msg) }
         val latencyMode = LatencyMode.fromKey(prefs.getString(Prefs.LATENCY_MODE, Prefs.DEF_LATENCY_MODE))
         videoRenderer.scheduledOutputBufferRelease = latencyMode.scheduledRelease
         videoRenderer.directRender = latencyMode.directRender
@@ -963,6 +964,7 @@ class AirPlayService : LifecycleService(), RaopCallbackHandler, LogListener {
         latencyMs = videoRenderer.latencyMs,
         activeCodec = videoRenderer.activeCodec,
         directRender = videoRenderer.directRenderActive,
+        renderPath = videoRenderer.renderPath,
         mirroring = _mirroringActive.value,
         audioCodec = audioRenderer.codecLabel,
         audioVolume = 100 * audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) /

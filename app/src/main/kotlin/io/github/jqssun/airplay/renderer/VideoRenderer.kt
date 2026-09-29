@@ -43,6 +43,11 @@ class VideoRenderer(ctx: Context) {
     @Volatile var activeCodec: CodecEntry? = null; private set
     // X25: true while the codec renders straight into the SurfaceView surface
     @Volatile var directRenderActive = false; private set
+    // X25: where decoded frames go right now: DIRECT, GPU, PARKED (no visible screen), FALLBACK (decoder refused direct)
+    @Volatile var renderPath = "—"; private set
+    // X25: user-visible events (Logs tab)
+    var eventLog: ((String) -> Unit)? = null
+    private var _directRefused = false
 
     var enforceSdr = true
     var keyAllowFrameDrop = true
@@ -88,6 +93,7 @@ class VideoRenderer(ctx: Context) {
         displaySurface = surface
         if (!directRender) {
             pipeline.setDisplaySurface(surface)
+            if (codec != null) renderPath = "GPU"
             return@synchronized
         }
         val c = codec ?: return@synchronized
@@ -100,6 +106,7 @@ class VideoRenderer(ctx: Context) {
         if (!directRender || !directRenderActive) {
             pipeline.setDisplaySurface(null)
         }
+        if (codec != null) renderPath = "PARKED"
         val c = codec ?: return@synchronized
         if (outputSurface === surface) {
             // park decoder output on the pipeline's texture so it keeps its reference frames
@@ -113,12 +120,16 @@ class VideoRenderer(ctx: Context) {
             c.setOutputSurface(target)
             outputSurface = target
             directRenderActive = toDisplay
+            renderPath = if (toDisplay) "DIRECT" else "PARKED"
             Log.i(TAG, "codec output -> ${if (toDisplay) "SurfaceView (direct)" else "pipeline (parked)"}")
         } catch (e: Exception) {
             Log.w(TAG, "setOutputSurface failed (toDisplay=$toDisplay)", e)
             if (toDisplay) {
                 // decoder refuses surface swaps: keep it on the pipeline and let GL present instead
                 directRenderActive = false
+                _directRefused = true
+                renderPath = "FALLBACK"
+                eventLog?.invoke("Decoder refused direct SurfaceView output (setOutputSurface: ${e.message}); using GPU path")
                 pipeline.setDisplaySurface(target)
             } else {
                 stopCodec()
@@ -297,6 +308,12 @@ class VideoRenderer(ctx: Context) {
         }
         outputSurface = target
         directRenderActive = target === display
+        renderPath = when {
+            directRenderActive -> "DIRECT"
+            !directRender -> "GPU"
+            else -> "PARKED"
+        }
+        eventLog?.invoke("Video decoder ${activeCodec?.name} (${activeCodec?.codecClass}) render=$renderPath")
         Log.i(TAG, "Video codec started: $mime ${videoWidth}x${videoHeight} ($codecName) " +
             "class=${activeCodec?.codecClass} direct=$directRenderActive")
     }
@@ -368,6 +385,7 @@ class VideoRenderer(ctx: Context) {
         codec = null
         outputSurface = null
         directRenderActive = false
+        renderPath = "—"
     }
 
     private fun drainOutput() {

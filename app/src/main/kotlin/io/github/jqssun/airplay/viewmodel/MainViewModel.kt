@@ -61,6 +61,7 @@ data class DebugInfo(
     val latencyMs: Float = 0f,
     val activeCodec: CodecEntry? = null,
     val directRender: Boolean = false,
+    val renderPath: String = "—",
     val mirroring: Boolean = false,
     val audioCodec: String = "",
     val audioVolume: Int = 100,

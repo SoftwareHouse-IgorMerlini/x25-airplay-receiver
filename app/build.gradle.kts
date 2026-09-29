@@ -35,8 +35,8 @@ android {
         applicationId = "com.x25.airplay"
         minSdk = 24
         targetSdk = 36
-        versionCode = 32
-        versionName = "0.0.31-x25.2"
+        versionCode = 33
+        versionName = "0.0.31-x25.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {

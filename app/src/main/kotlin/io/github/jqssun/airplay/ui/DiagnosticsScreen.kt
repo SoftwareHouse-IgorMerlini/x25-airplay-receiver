@@ -35,7 +35,13 @@ fun DiagnosticsScreen(viewModel: MainViewModel) {
         DiagCard("Rendering") {
             DiagRow("Hardware accelerated (window)", CodecRanking.yesNo(view.isHardwareAccelerated))
             DiagRow("Video surface", "SurfaceView (MediaCodec output Surface, no Bitmap / no CPU YUV->RGB)")
-            DiagRow("Direct MediaCodec -> SurfaceView", if (info.activeCodec == null) "—" else CodecRanking.yesNo(info.directRender))
+            DiagRow("Direct MediaCodec -> SurfaceView", when (info.renderPath) {
+                "DIRECT" -> "YES"
+                "PARKED" -> "PAUSED (video not on screen while this tab is open; check the debug overlay on the video)"
+                "GPU" -> "NO (Latency = STABLE uses the GPU path)"
+                "FALLBACK" -> "NO (decoder refused direct output, using GPU path)"
+                else -> "—"
+            })
         }
 
         DiagCard("Active decoder") {

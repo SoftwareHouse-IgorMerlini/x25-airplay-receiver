@@ -1073,7 +1073,13 @@ private fun x25StatusLines(info: DebugInfo, connected: Boolean): List<String> {
         "Dropped Frames: " + info.droppedFrames,
         "Buffer: " + if (active) "${info.decoderBufferMs} ms" else "—",
         "Latency: " + if (active) "${info.latencyMs.toInt()} ms" else "—",
-        "Render: " + if (!active) "—" else if (info.directRender) "direct SurfaceView" else "GL pipeline",
+        "Render: " + when (info.renderPath) {
+            "DIRECT" -> "DIRECT (SurfaceView)"
+            "GPU" -> "GPU pipeline"
+            "FALLBACK" -> "GPU (direct refused)"
+            "PARKED" -> "paused (off screen)"
+            else -> "—"
+        },
     )
 }
 
